@@ -15,7 +15,9 @@ pipeline {
 
         stage('Terraform Version') {
             steps {
+                ansiColor('xterm') {
                 sh 'terraform version'
+                }     
             }
         }
 
@@ -25,7 +27,9 @@ pipeline {
                     [$class: 'AmazonWebServicesCredentialsBinding',
                     credentialsId: 'aws-creds']
                 ]) {
+                    ansiColor('xterm') {
                     sh 'terraform init'
+                    }
                 }
             }
         }
@@ -36,7 +40,9 @@ pipeline {
                     [$class: 'AmazonWebServicesCredentialsBinding',
                     credentialsId: 'aws-creds']
                 ]) {
+                    ansiColor('xterm') {
                     sh 'terraform validate'
+                    }
                 }
             }
         }
@@ -47,7 +53,9 @@ pipeline {
                     [$class: 'AmazonWebServicesCredentialsBinding',
                     credentialsId: 'aws-creds']
                 ]) {
+                    ansiColor('xterm') {
                     sh 'terraform plan -out=tfplan'
+                    }
                 }
             }
         }
@@ -64,7 +72,9 @@ pipeline {
                     [$class: 'AmazonWebServicesCredentialsBinding',
                     credentialsId: 'aws-creds']
                 ]) {
+                    ansiColor('xterm') {
                     sh 'terraform apply -auto-approve tfplan'
+                    }
                 }
             }
         }
