@@ -22,31 +22,19 @@ pipeline {
         stage('Terraform Init') {
             steps {
                 withCredentials([
-                    usernamePassword(
-                        credentialsId: 'AKIA4I7K32Z6KT536FRC',
-                        usernameVariable: 'AWS_ACCESS_KEY_ID',
-                        passwordVariable: 'AWS_SECRET_ACCESS_KEY'
-                    )
+                    [$class: 'AmazonWebServicesCredentialsBinding',
+                    credentialsId: 'aws-creds']
                 ]) {
                     sh 'terraform init'
                 }
             }
         }
 
-        stage('Terraform Format') {
-            steps {
-                sh 'terraform fmt -check'
-            }
-        }
-
         stage('Terraform Validate') {
             steps {
                 withCredentials([
-                    usernamePassword(
-                        credentialsId: 'AKIA4I7K32Z6KT536FRC',
-                        usernameVariable: 'AWS_ACCESS_KEY_ID',
-                        passwordVariable: 'AWS_SECRET_ACCESS_KEY'
-                    )
+                    [$class: 'AmazonWebServicesCredentialsBinding',
+                    credentialsId: 'aws-creds']
                 ]) {
                     sh 'terraform validate'
                 }
@@ -56,11 +44,8 @@ pipeline {
         stage('Terraform Plan') {
             steps {
                 withCredentials([
-                    usernamePassword(
-                        credentialsId: 'AKIA4I7K32Z6KT536FRC',
-                        usernameVariable: 'AWS_ACCESS_KEY_ID',
-                        passwordVariable: 'AWS_SECRET_ACCESS_KEY'
-                    )
+                    [$class: 'AmazonWebServicesCredentialsBinding',
+                    credentialsId: 'aws-creds']
                 ]) {
                     sh 'terraform plan -out=tfplan'
                 }
@@ -69,18 +54,15 @@ pipeline {
 
         stage('Approval') {
             steps {
-                input 'Apply Terraform Changes?'
+                input 'Apply Terraform?'
             }
         }
 
         stage('Terraform Apply') {
             steps {
                 withCredentials([
-                    usernamePassword(
-                        credentialsId: 'AKIA4I7K32Z6KT536FRC',
-                        usernameVariable: 'AWS_ACCESS_KEY_ID',
-                        passwordVariable: 'AWS_SECRET_ACCESS_KEY'
-                    )
+                    [$class: 'AmazonWebServicesCredentialsBinding',
+                    credentialsId: 'aws-creds']
                 ]) {
                     sh 'terraform apply -auto-approve tfplan'
                 }
