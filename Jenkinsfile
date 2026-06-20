@@ -6,7 +6,6 @@ pipeline {
     }
 
     stages {
-
         stage('Checkout') {
             steps {
                 checkout scm
@@ -16,19 +15,16 @@ pipeline {
         stage('Terraform Version') {
             steps {
                 ansiColor('xterm') {
-                sh 'terraform version'
-                }     
+                    sh 'terraform version'
+                }
             }
         }
 
         stage('Terraform Init') {
             steps {
-                withCredentials([
-                    [$class: 'AmazonWebServicesCredentialsBinding',
-                    credentialsId: 'aws-creds']
-                ]) {
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-creds']]) {
                     ansiColor('xterm') {
-                    sh 'terraform init'
+                        sh 'terraform init'
                     }
                 }
             }
@@ -36,12 +32,9 @@ pipeline {
 
         stage('Terraform Validate') {
             steps {
-                withCredentials([
-                    [$class: 'AmazonWebServicesCredentialsBinding',
-                    credentialsId: 'aws-creds']
-                ]) {
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-creds']]) {
                     ansiColor('xterm') {
-                    sh 'terraform validate'
+                        sh 'terraform validate'
                     }
                 }
             }
@@ -49,12 +42,9 @@ pipeline {
 
         stage('Terraform Plan') {
             steps {
-                withCredentials([
-                    [$class: 'AmazonWebServicesCredentialsBinding',
-                    credentialsId: 'aws-creds']
-                ]) {
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-creds']]) {
                     ansiColor('xterm') {
-                    sh 'terraform plan -out=tfplan'
+                        sh 'terraform plan -out=tfplan'
                     }
                 }
             }
@@ -68,12 +58,32 @@ pipeline {
 
         stage('Terraform Apply') {
             steps {
-                withCredentials([
-                    [$class: 'AmazonWebServicesCredentialsBinding',
-                    credentialsId: 'aws-creds']
-                ]) {
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-creds']]) {
                     ansiColor('xterm') {
-                    sh 'terraform apply -auto-approve tfplan'
+                        sh 'terraform apply -auto-approve tfplan'
+                    }
+                }
+            }
+        }
+
+        stage('Destroy Approval') {
+            steps {
+                input 'Destroy Terraform resources?'
+            }
+        }
+
+        stage('Terraform Destroy') {
+            when {
+                beforeAgent true
+                expression {
+                    // Only run if user approved the Destroy stage
+                    true
+                }
+            }
+            steps {
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-creds']]) {
+                    ansiColor('xterm') {
+                        sh 'terraform destroy -auto-approve'
                     }
                 }
             }
