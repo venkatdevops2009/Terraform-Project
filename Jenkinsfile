@@ -23,9 +23,11 @@ pipeline {
 
         stage('Terraform Init') {
             steps {
-                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-creds']]) {
-                    ansiColor('xterm') {
-                        sh 'terraform init -reconfigure'
+                dir(Infra') {
+                    withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-creds']]) {
+                        ansiColor('xterm') {
+                            sh 'terraform init -reconfigure'
+                        }
                     }
                 }
             }
@@ -33,17 +35,19 @@ pipeline {
 
         stage('Terraform Action') {
             steps {
-                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-creds']]) {
-                    ansiColor('xterm') {
-                        script {
-                            if (params.ACTION == 'plan') {
-                                sh 'terraform plan -out=tfplan'
-                            } else if (params.ACTION == 'apply') {
-                                input message: 'Are you sure you want to APPLY changes?'
-                                sh 'terraform apply -auto-approve tfplan'
-                            } else if (params.ACTION == 'destroy') {
-                                input message: 'Are you sure you want to DESTROY all resources?'
-                                sh 'terraform destroy -auto-approve'
+                dir(Infra') {
+                    withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-creds']]) {
+                        ansiColor('xterm') {
+                            script {
+                                if (params.ACTION == 'plan') {
+                                    sh 'terraform plan -out=tfplan'
+                                } else if (params.ACTION == 'apply') {
+                                    input message: 'Are you sure you want to APPLY changes?'
+                                    sh 'terraform apply -auto-approve tfplan'
+                                } else if (params.ACTION == 'destroy') {
+                                    input message: 'Are you sure you want to DESTROY all resources?'
+                                    sh 'terraform destroy -auto-approve'
+                                }
                             }
                         }
                     }
@@ -56,18 +60,20 @@ pipeline {
                 expression { params.ACTION == 'apply' }
             }
             steps {
-                sh '''
-                  JAVA_IP=$(terraform output -raw java_server_ip)
-                  DB_IP=$(terraform output -raw db_server_ip)
+                dir(Infra') {
+                    sh '''
+                      JAVA_IP=$(terraform output -raw java_server_ip)
+                      DB_IP=$(terraform output -raw db_server_ip)
 
-                  cat <<EOF > infra/ansible/inventory.ini
+                      cat <<EOF > ansible/inventory.ini
 [java_server]
 $JAVA_IP ansible_user=${EC2_CREDS_USR} ansible_password=${EC2_CREDS_PSW} ansible_connection=ssh
 
 [db_server]
 $DB_IP ansible_user=${EC2_CREDS_USR} ansible_password=${EC2_CREDS_PSW} ansible_connection=ssh
 EOF
-                '''
+                    '''
+                }
             }
         }
 
@@ -76,7 +82,9 @@ EOF
                 expression { params.ACTION == 'apply' }
             }
             steps {
-                sh 'ansible-playbook -i infra/ansible/inventory.ini infra/ansible/db-server.yml'
+                dir('Ansible') {
+                    sh 'ansible-playbook -i inventory.ini db-server.yml'
+                }
             }
         }
 
@@ -85,7 +93,9 @@ EOF
                 expression { params.ACTION == 'apply' }
             }
             steps {
-                sh 'ansible-playbook -i infra/ansible/inventory.ini infra/ansible/java-server.yml'
+                dir('Ansible') {
+                    sh 'ansible-playbook -i inventory.ini java-server.yml'
+                }
             }
         }
     }
