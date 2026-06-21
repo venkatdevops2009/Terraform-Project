@@ -172,65 +172,10 @@ EOF
 
                     cat ../Ansible/inventory.ini
                     '''
+                   }
                 }
-            }
-        }
-    }
-    
-
-        stage('Wait For SSH') {
-
-            when {
-                expression {
-                    params.ACTION == "apply"
-                }
-            }
-
-            steps {
-
-                withCredentials([
-                    sshUserPrivateKey(
-                        credentialsId: 'aws-key',
-                        keyFileVariable: 'SSH_KEY',
-                        usernameVariable: 'SSH_USER'
-                    )
-                ]) {
-
-                    dir('Infra') {
-
-                        sh '''
-                        chmod 600 $SSH_KEY
-
-                        JAVA_IP=$(terraform output -raw java_server_public_ip)
-                        DB_IP=$(terraform output -raw db_server_private_ip)
-
-                        for HOST in $JAVA_IP $DB_IP
-                        do
-
-                            echo "Waiting for SSH on $HOST..."
-
-                            for i in {1..30}
-                            do
-
-                                ssh \
-                                  -o StrictHostKeyChecking=no \
-                                  -o UserKnownHostsFile=/dev/null \
-                                  -o ConnectTimeout=5 \
-                                  -i $SSH_KEY \
-                                  $SSH_USER@$HOST "echo SSH Ready" && break
-
-                                echo "Retry $i..."
-
-                                sleep 10
-
-                            done
-
-                        done
-                        '''
-                    }
-                }
-            }
-        }
+           }
+       }       
 
         stage('Ansible Connectivity Test') {
 
