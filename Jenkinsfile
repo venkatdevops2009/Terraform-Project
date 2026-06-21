@@ -154,7 +154,7 @@ pipeline {
 
                         sh """
                         JAVA_IP=\$(terraform output -raw java_server_public_ip)
-                        DB_IP=\$(terraform output -raw db_server_public_ip)
+                        DB_IP=\$(terraform output -raw db_server_private_ip)
 
                         cat > ../Ansible/inventory.ini <<EOF
 [java_server]
