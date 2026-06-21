@@ -23,7 +23,7 @@ pipeline {
 
         stage('Terraform Init') {
             steps {
-                dir(Infra') {
+                dir('Infra') {
                     withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-creds']]) {
                         ansiColor('xterm') {
                             sh 'terraform init -reconfigure'
@@ -35,7 +35,7 @@ pipeline {
 
         stage('Terraform Action') {
             steps {
-                dir(Infra') {
+                dir('Infra') {
                     withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-creds']]) {
                         ansiColor('xterm') {
                             script {
@@ -60,7 +60,7 @@ pipeline {
                 expression { params.ACTION == 'apply' }
             }
             steps {
-                dir(Infra') {
+                dir('Infra') {
                     sh '''
                       JAVA_IP=$(terraform output -raw java_server_ip)
                       DB_IP=$(terraform output -raw db_server_ip)
