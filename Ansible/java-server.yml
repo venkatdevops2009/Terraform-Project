@@ -1,0 +1,54 @@
+# java-server.yml
+- hosts: java_server
+  become: yes
+  vars:
+    db_host: "{{ hostvars['db_server'].ansible_host }}"
+    db_name: petclinic
+    db_user: petclinic_user
+    db_password: yourpassword
+
+  tasks:
+    - name: Install Java
+      yum:
+        name: java-1.8.0-openjdk
+        state: present
+
+    - name: Install Maven
+      yum:
+        name: maven
+        state: present
+
+    - name: Install Tomcat
+      yum:
+        name: tomcat
+        state: present
+
+    - name: Start Tomcat
+      service:
+        name: tomcat
+        state: started
+        enabled: yes
+
+    - name: Clone PetClinic repo
+      git:
+        repo: https://github.com/venkatdevops2009/pet-clinic-app.git
+        dest: /opt/petclinic
+        version: main
+
+    - name: Update application.properties with DB connection
+      blockinfile:
+        path: /opt/petclinic/src/main/resources/application.properties
+        block: |
+          spring.datasource.url=jdbc:mysql://{{ db_host }}:3306/{{ db_name }}
+          spring.datasource.username={{ db_user }}
+          spring.datasource.password={{ db_password }}
+
+    - name: Build WAR with Maven
+      command: mvn clean install
+      args:
+        chdir: /opt/petclinic
+
+    - name: Copy WAR to Tomcat
+      copy:
+        src: /opt/petclinic/target/petclinic.war
+        dest: /usr/share/tomcat/webapps/petclinic.war

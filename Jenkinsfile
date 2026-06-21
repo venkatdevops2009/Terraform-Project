@@ -1,89 +1,91 @@
 pipeline {
     agent any
 
+    parameters {
+        choice(
+            name: 'ACTION',
+            choices: ['plan', 'apply', 'destroy'],
+            description: 'Choose Terraform action to perform'
+        )
+    }
+
     environment {
         AWS_DEFAULT_REGION = "us-east-1"
+        EC2_CREDS = credentials('ec2-login')   // Jenkins credentials ID for username+password
     }
 
     stages {
-
         stage('Checkout') {
             steps {
                 checkout scm
             }
         }
 
-        stage('Terraform Version') {
-            steps {
-                sh 'terraform version'
-            }
-        }
-
         stage('Terraform Init') {
             steps {
-                withCredentials([
-                    usernamePassword(
-                        credentialsId: 'AKIA4I7K32Z6KT536FRC',
-                        usernameVariable: 'AWS_ACCESS_KEY_ID',
-                        passwordVariable: 'AWS_SECRET_ACCESS_KEY'
-                    )
-                ]) {
-                    sh 'terraform init'
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-creds']]) {
+                    ansiColor('xterm') {
+                        sh 'terraform init'
+                    }
                 }
             }
         }
 
-        stage('Terraform Format') {
+        stage('Terraform Action') {
             steps {
-                sh 'terraform fmt -check'
-            }
-        }
-
-        stage('Terraform Validate') {
-            steps {
-                withCredentials([
-                    usernamePassword(
-                        credentialsId: 'AKIA4I7K32Z6KT536FRC',
-                        usernameVariable: 'AWS_ACCESS_KEY_ID',
-                        passwordVariable: 'AWS_SECRET_ACCESS_KEY'
-                    )
-                ]) {
-                    sh 'terraform validate'
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-creds']]) {
+                    ansiColor('xterm') {
+                        script {
+                            if (params.ACTION == 'plan') {
+                                sh 'terraform plan -out=tfplan'
+                            } else if (params.ACTION == 'apply') {
+                                input message: 'Are you sure you want to APPLY changes?'
+                                sh 'terraform apply -auto-approve tfplan'
+                            } else if (params.ACTION == 'destroy') {
+                                input message: 'Are you sure you want to DESTROY all resources?'
+                                sh 'terraform destroy -auto-approve'
+                            }
+                        }
+                    }
                 }
             }
         }
 
-        stage('Terraform Plan') {
+        stage('Generate Inventory') {
+            when {
+                expression { params.ACTION == 'apply' }
+            }
             steps {
-                withCredentials([
-                    usernamePassword(
-                        credentialsId: 'AKIA4I7K32Z6KT536FRC',
-                        usernameVariable: 'AWS_ACCESS_KEY_ID',
-                        passwordVariable: 'AWS_SECRET_ACCESS_KEY'
-                    )
-                ]) {
-                    sh 'terraform plan -out=tfplan'
-                }
+                sh '''
+                  JAVA_IP=$(terraform output -raw java_server_ip)
+                  DB_IP=$(terraform output -raw db_server_ip)
+
+                  cat <<EOF > infra/ansible/inventory.ini
+[java_server]
+$JAVA_IP ansible_user=${EC2_CREDS_USR} ansible_password=${EC2_CREDS_PSW} ansible_connection=ssh
+
+[db_server]
+$DB_IP ansible_user=${EC2_CREDS_USR} ansible_password=${EC2_CREDS_PSW} ansible_connection=ssh
+EOF
+                '''
             }
         }
 
-        stage('Approval') {
+        stage('Configure DB Server') {
+            when {
+                expression { params.ACTION == 'apply' }
+            }
             steps {
-                input 'Apply Terraform Changes?'
+                sh 'ansible-playbook -i infra/ansible/inventory.ini infra/ansible/db-server.yml'
             }
         }
 
-        stage('Terraform Apply') {
+        stage('Configure Java Server') {
+            when {
+                expression { params.ACTION == 'apply' }
+            }
             steps {
-                withCredentials([
-                    usernamePassword(
-                        credentialsId: 'AKIA4I7K32Z6KT536FRC',
-                        usernameVariable: 'AWS_ACCESS_KEY_ID',
-                        passwordVariable: 'AWS_SECRET_ACCESS_KEY'
-                    )
-                ]) {
-                    sh 'terraform apply -auto-approve tfplan'
-                }
+                sh 'ansible-playbook -i infra/ansible/inventory.ini infra/ansible/java-server.yml'
             }
         }
     }

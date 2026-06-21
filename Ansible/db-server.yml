@@ -1,0 +1,27 @@
+# db-server.yml
+- hosts: db_server
+  become: yes
+  tasks:
+    - name: Install MySQL
+      yum:
+        name: mysql-server
+        state: present
+
+    - name: Start MySQL
+      service:
+        name: mysqld
+        state: started
+        enabled: yes
+
+    - name: Create PetClinic database
+      mysql_db:
+        name: petclinic
+        state: present
+
+    - name: Create PetClinic user
+      mysql_user:
+        name: petclinic_user
+        password: yourpassword
+        priv: "petclinic.*:ALL"
+        host: "%"
+        state: present
