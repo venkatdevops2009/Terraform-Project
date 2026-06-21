@@ -148,7 +148,12 @@ pipeline {
 
             steps {
 
-                dir('Infra') {
+                dir('Infra') 
+                withCredentials([
+                        [$class: 'AmazonWebServicesCredentialsBinding',
+                        credentialsId: 'aws-creds']
+                    ])
+                {
 
                     sh '''
                     JAVA_IP=$(terraform output -raw java_server_public_ip)
