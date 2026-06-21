@@ -62,8 +62,8 @@ pipeline {
             steps {
                 dir('Infra') {
                     sh '''
-                      JAVA_IP=$(terraform output -raw java_server_ip)
-                      DB_IP=$(terraform output -raw db_server_ip)
+                      JAVA_IP=$(terraform output -raw java_server_public_ip)
+                      DB_IP=$(terraform output -raw db_server_public_ip)
 
                       cat <<EOF > ansible/inventory.ini
 [java_server]
