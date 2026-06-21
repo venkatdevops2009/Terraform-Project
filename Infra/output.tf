@@ -1,7 +1,7 @@
-output "Java Server Public IP" {
+output "java_server_public_ip" {
   value = aws_instance.java_server.public_ip
 }
 
-output "DB Server Private IP" {
+output "db_server_private_ip" {
   value = aws_instance.db_server.private_ip
 }
