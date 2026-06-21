@@ -2,17 +2,18 @@ resource "aws_instance" "java_server" {
   ami           = var.ami_id
   instance_type = var.instance_type
   subnet_id     = aws_subnet.public[0].id
-  security_groups = [aws_security_group.java_sg.name]
+  vpc_security_group_ids = [aws_security_group.java_sg.name]
     tags = {
         Name = "petclinic"
     }
+    
 }
 
 resource "aws_instance" "db_server" {  
   ami           = var.ami_id
   instance_type = var.instance_type
   subnet_id     = aws_subnet.private[0].id
-  security_groups = [aws_security_group.db_sg.name]
+  vpc_security_group_ids = [aws_security_group.db_sg.name]
     tags = {
         Name = "mysql"
     }
