@@ -33,3 +33,9 @@ variable "instance_type" {
   type        = string
   default     = "t3.micro" # Replace with your desired instance type
 }
+
+variable "key_name" {
+  description = "The name of the SSH key pair to use for the EC2 instances."
+  type        = string
+  default     = "petclinic-key" # Replace with your actual key pair name
+}

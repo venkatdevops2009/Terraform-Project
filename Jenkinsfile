@@ -13,14 +13,13 @@ pipeline {
         choice(
             name: 'ACTION',
             choices: ['plan', 'apply', 'destroy'],
-            description: 'Select Terraform Action'
+            description: 'Terraform Action'
         )
     }
 
     environment {
         AWS_DEFAULT_REGION = 'us-east-1'
         TF_IN_AUTOMATION = 'true'
-        EC2_CREDS = credentials('ec2-login')
     }
 
     stages {
@@ -38,6 +37,7 @@ pipeline {
                         [$class: 'AmazonWebServicesCredentialsBinding',
                         credentialsId: 'aws-creds']
                     ]) {
+
                         sh '''
                         terraform init -reconfigure
                         '''
@@ -58,6 +58,7 @@ pipeline {
         }
 
         stage('Terraform Plan') {
+
             when {
                 expression {
                     params.ACTION == "plan" || params.ACTION == "apply"
@@ -76,6 +77,8 @@ pipeline {
                         sh '''
                         terraform plan -out=tfplan
                         '''
+
+                        archiveArtifacts artifacts: 'tfplan'
                     }
                 }
             }
@@ -147,29 +150,111 @@ pipeline {
 
                 dir('Infra') {
 
-                    withCredentials([
-                        [$class: 'AmazonWebServicesCredentialsBinding',
-                        credentialsId: 'aws-creds']
-                    ]) {
+                    sh '''
+                    JAVA_IP=$(terraform output -raw java_server_public_ip)
+                    DB_IP=$(terraform output -raw db_server_private_ip)
 
-                        sh """
-                        JAVA_IP=\$(terraform output -raw java_server_public_ip)
-                        DB_IP=\$(terraform output -raw db_server_private_ip)
-
-                        cat > ../Ansible/inventory.ini <<EOF
+                    cat > ../Ansible/inventory.ini <<EOF
 [java_server]
-\$JAVA_IP ansible_user=${EC2_CREDS_USR} ansible_password=${EC2_CREDS_PSW} ansible_connection=ssh
+$JAVA_IP ansible_user=ec2-user
 
 [db_server]
-\$DB_IP ansible_user=${EC2_CREDS_USR} ansible_password=${EC2_CREDS_PSW} ansible_connection=ssh
+$DB_IP ansible_user=ec2-user
 EOF
 
-                        echo "======================================"
-                        echo "Generated Inventory"
-                        echo "======================================"
+                    echo "=============================="
+                    echo "Generated Inventory"
+                    echo "=============================="
 
-                        cat ../Ansible/inventory.ini
-                        """
+                    cat ../Ansible/inventory.ini
+                    '''
+                }
+            }
+        }
+
+        stage('Wait For SSH') {
+
+            when {
+                expression {
+                    params.ACTION == "apply"
+                }
+            }
+
+            steps {
+
+                withCredentials([
+                    sshUserPrivateKey(
+                        credentialsId: 'aws-key',
+                        keyFileVariable: 'SSH_KEY',
+                        usernameVariable: 'SSH_USER'
+                    )
+                ]) {
+
+                    dir('Infra') {
+
+                        sh '''
+                        chmod 600 $SSH_KEY
+
+                        JAVA_IP=$(terraform output -raw java_server_public_ip)
+                        DB_IP=$(terraform output -raw db_server_private_ip)
+
+                        for HOST in $JAVA_IP $DB_IP
+                        do
+
+                            echo "Waiting for SSH on $HOST..."
+
+                            for i in {1..30}
+                            do
+
+                                ssh \
+                                  -o StrictHostKeyChecking=no \
+                                  -o UserKnownHostsFile=/dev/null \
+                                  -o ConnectTimeout=5 \
+                                  -i $SSH_KEY \
+                                  $SSH_USER@$HOST "echo SSH Ready" && break
+
+                                echo "Retry $i..."
+
+                                sleep 10
+
+                            done
+
+                        done
+                        '''
+                    }
+                }
+            }
+        }
+
+        stage('Ansible Connectivity Test') {
+
+            when {
+                expression {
+                    params.ACTION == "apply"
+                }
+            }
+
+            steps {
+
+                withCredentials([
+                    sshUserPrivateKey(
+                        credentialsId: 'aws-key',
+                        keyFileVariable: 'SSH_KEY',
+                        usernameVariable: 'SSH_USER'
+                    )
+                ]) {
+
+                    dir('Ansible') {
+
+                        sh '''
+                        chmod 600 $SSH_KEY
+
+                        ansible all \
+                          -i inventory.ini \
+                          -m ping \
+                          --private-key=$SSH_KEY \
+                          -u $SSH_USER
+                        '''
                     }
                 }
             }
@@ -185,11 +270,29 @@ EOF
 
             steps {
 
-                dir('Ansible') {
+                withCredentials([
+                    sshUserPrivateKey(
+                        credentialsId: 'aws-key',
+                        keyFileVariable: 'SSH_KEY',
+                        usernameVariable: 'SSH_USER'
+                    )
+                ]) {
 
-                    sh '''
-                    ansible-playbook -i inventory.ini db-server.yml
-                    '''
+                    retry(3) {
+
+                        dir('Ansible') {
+
+                            sh '''
+                            chmod 600 $SSH_KEY
+
+                            ansible-playbook \
+                              -i inventory.ini \
+                              --private-key=$SSH_KEY \
+                              -u $SSH_USER \
+                              db-server.yml
+                            '''
+                        }
+                    }
                 }
             }
         }
@@ -204,30 +307,71 @@ EOF
 
             steps {
 
-                dir('Ansible') {
+                withCredentials([
+                    sshUserPrivateKey(
+                        credentialsId: 'aws-key',
+                        keyFileVariable: 'SSH_KEY',
+                        usernameVariable: 'SSH_USER'
+                    )
+                ]) {
 
-                    sh '''
-                    ansible-playbook -i inventory.ini java-server.yml
-                    '''
+                    retry(3) {
+
+                        dir('Ansible') {
+
+                            sh '''
+                            chmod 600 $SSH_KEY
+
+                            ansible-playbook \
+                              -i inventory.ini \
+                              --private-key=$SSH_KEY \
+                              -u $SSH_USER \
+                              java-server.yml
+                            '''
+                        }
+                    }
                 }
             }
         }
 
+        stage('Application Health Check') {
+
+            when {
+                expression {
+                    params.ACTION == "apply"
+                }
+            }
+
+            steps {
+
+                dir('Infra') {
+
+                    sh '''
+                    JAVA_IP=$(terraform output -raw java_server_public_ip)
+
+                    echo "Waiting for application..."
+
+                    sleep 30
+
+                    curl -I http://$JAVA_IP:8080 || true
+                    '''
+                }
+            }
+        }
     }
 
     post {
 
         success {
-            echo "Infrastructure deployment completed successfully."
+            echo 'Pipeline completed successfully.'
         }
 
         failure {
-            echo "Pipeline failed. Check the console logs for details."
+            echo 'Pipeline failed.'
         }
 
         always {
             cleanWs()
         }
-
     }
 }

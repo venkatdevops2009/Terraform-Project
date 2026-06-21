@@ -3,6 +3,7 @@ resource "aws_instance" "java_server" {
   instance_type          = var.instance_type
   subnet_id              = aws_subnet.public[0].id
   vpc_security_group_ids = [aws_security_group.java_sg.id]
+  key_name               = var.key_name
   tags = {
     Name = "petclinic"
   }
@@ -14,6 +15,7 @@ resource "aws_instance" "db_server" {
   instance_type          = var.instance_type
   subnet_id              = aws_subnet.private[0].id
   vpc_security_group_ids = [aws_security_group.db_sg.id]
+  key_name               = var.key_name
   tags = {
     Name = "mysql"
   }
