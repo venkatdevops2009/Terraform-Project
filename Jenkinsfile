@@ -25,7 +25,7 @@ pipeline {
             steps {
                 withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-creds']]) {
                     ansiColor('xterm') {
-                        sh 'terraform init -migrate-state'
+                        sh 'terraform init -reconfigure'
                     }
                 }
             }
